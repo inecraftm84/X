@@ -25,7 +25,7 @@ gcc -shared -fPIC -o print.so print.c
 2. Usage
 To run a script, pass the script file followed by the libraries you wish to load:
 ```bash
-./xc test.x ./math.so ./print.so
+./xc test.x
 ```
 ### File Structure
 xc.c: The Core Dispatcher. It reads .x files and invokes libraries via dlopen.
