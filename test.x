@@ -1,7 +1,8 @@
-using math.so
-using print.so
-print Hello X World
-print 666
-10 + 20 = a
-
-print a
+using ./so/math.so
+using ./so/print.so
+2 + 6 = ppp
+print ppp
+ppp + ppp = ???
+print ???
+??? * ??? = z
+print z
