@@ -27,22 +27,13 @@ To run a script, pass the script file followed by the libraries you wish to load
 ```bash
 ./xc test.x
 ```
-### File Structure
-xc.c: The Core Dispatcher. It reads .x files and invokes libraries via dlopen.
-
-math.c: Mathematics Library. Handles arithmetic logic and updates the global x_vars.
-
-print.c: Output Library. Responsible for printing strings or variable values.
-
-test.x: The X-Lang Source Code (script).
 
 ### Extension Guide
 To develop a new instruction, simply implement the following function in your .c file:
 ```C
 #include <stdio.h>
-
-// Access the 26 global variable slots provided by the core
-extern int x_vars[26]; 
+#include <string.h>
+extern int* g_ptr(char *name);
 
 void x_exec(char *line) {
     if (/* Your recognition logic here */) {
