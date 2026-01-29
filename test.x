@@ -1,8 +1,13 @@
 using ./so/math.so
+using ./so/jump.so
+using ./so/time.so
 using ./so/print.so
-2 + 6 = ppp
-print ppp
-ppp + ppp = ???
-print ???
-??? * ??? = z
-print z
+set k 0
+start_timer
+
+:LOOP
+k + 1 = k
+if k < 1 GOTO LOOP
+
+stop_timer
+print k

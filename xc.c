@@ -2,78 +2,86 @@
 #include <stdlib.h>
 #include <string.h>
 #include <dlfcn.h>
+#include <ctype.h>
+
+#define EXPORT __attribute__((visibility("default")))
+
+typedef struct { char name[32]; int value; } Var;
+Var vars[1000];
+int v_cnt = 0;
 
 typedef struct {
-    char name[32];
-    int value;
-} Variable;
+    int *v1, *v2, *trg;
+    int op;
+    int *jmp_ptr;
+} Inst;
 
-Variable vars[1000];
-int var_count = 0;
+Inst code[5000];
+int pc = 0, t_ln = 0;
 
-int get_var(const char *name) {
-    for (int i = 0; i < var_count; i++) {
-        if (strcmp(vars[i].name, name) == 0) return vars[i].value;
+EXPORT int* g_ptr(char *n) {
+    if (isdigit(n[0]) || (n[0] == '-' && isdigit(n[1]))) {
+        int i = v_cnt++;
+        sprintf(vars[i].name, "_c%d", i);
+        vars[i].value = atoi(n);
+        return &vars[i].value;
     }
-    return 0;
+    for (int i = 0; i < v_cnt; i++) if (!strcmp(vars[i].name, n)) return &vars[i].value;
+    strcpy(vars[v_cnt].name, n);
+    vars[v_cnt].value = 0;
+    return &vars[v_cnt++].value;
 }
 
-void set_var(const char *name, int val) {
-    for (int i = 0; i < var_count; i++) {
-        if (strcmp(vars[i].name, name) == 0) {
-            vars[i].value = val;
-            return;
-        }
-    }
-    if (var_count < 1000) {
-        strncpy(vars[var_count].name, name, 31);
-        vars[var_count].value = val;
-        var_count++;
-    }
-}
+EXPORT int get_var(const char *n) { return *g_ptr((char*)n); }
 
-typedef void (*exec_fn)(char *);
-void *handles[100];
-exec_fn funcs[100];
-int lib_count = 0;
+typedef void (*ex_f)(char *);
+ex_f fns[10];
+int l_cnt = 0;
 
-void load_lib(const char *path) {
-    if (lib_count >= 100) return;
-    void *h = dlopen(path, RTLD_LAZY | RTLD_GLOBAL);
-    if (h) {
-        exec_fn f = (exec_fn)dlsym(h, "x_exec");
-        if (f) {
-            handles[lib_count] = h;
-            funcs[lib_count++] = f;
-        }
-    } else {
-        fprintf(stderr, "Load Error: %s\n", dlerror());
-    }
-}
+int main(int ac, char **av) {
+    if (ac < 2) return 1;
+    FILE *f = fopen(av[ac-1], "r");
+    char ln[256], *prg[5000];
+    int raw_cnt = 0;
 
-int main(int argc, char *argv[]) {
-    if (argc < 2) return 1;
-    char *inf = argv[argc - 1];
-
-    for (int i = 1; i < argc - 1; i++) load_lib(argv[i]);
-
-    FILE *f = fopen(inf, "r");
-    if (!f) return 1;
-
-    char line[256];
-    while (fgets(line, sizeof(line), f)) {
-        line[strcspn(line, "\r\n")] = 0;
-        if (strlen(line) == 0 || line[0] == '#') continue;
-
-        if (strncmp(line, "using ", 6) == 0) {
-            load_lib(line + 6);
+    while (fgets(ln, 256, f)) {
+        ln[strcspn(ln, "\r\n")] = 0;
+        char *p = ln; while (*p == ' ') p++;
+        if (!*p || *p == '#') continue;
+        if (!strncmp(p, "using ", 6)) {
+            void *h = dlopen(p + 6, RTLD_LAZY | RTLD_GLOBAL);
+            if (h) fns[l_cnt++] = (ex_f)dlsym(h, "x_exec");
             continue;
         }
-
-        for (int i = 0; i < lib_count; i++) funcs[i](line);
+        if (*p == ':') { *g_ptr(p + 1) = raw_cnt; continue; }
+        prg[raw_cnt++] = strdup(p);
     }
 
-    fclose(f);
-    for (int i = 0; i < lib_count; i++) dlclose(handles[i]);
+    for (int i = 0; i < raw_cnt; i++) {
+        char s1[32], s2[32], trg[32], op;
+        if (sscanf(prg[i], " %s %c %s = %s", s1, &op, s2, trg) == 4) {
+            code[t_ln] = (Inst){g_ptr(s1), g_ptr(s2), g_ptr(trg), op, NULL};
+        } else if (sscanf(prg[i], " if %s < %s GOTO %s", s1, s2, trg) == 3) {
+            code[t_ln] = (Inst){g_ptr(s1), g_ptr(s2), NULL, 'i', g_ptr(trg)};
+        } else if (sscanf(prg[i], " print %s", s1) == 1) {
+            code[t_ln] = (Inst){g_ptr(s1), NULL, NULL, 'p', NULL};
+        } else {
+            code[t_ln] = (Inst){(int*)prg[i], NULL, NULL, 'x', NULL};
+        }
+        t_ln++;
+    }
+
+    while (pc < t_ln) {
+        Inst *n = &code[pc];
+        switch(n->op) {
+            case '+': *n->trg = *n->v1 + *n->v2; pc++; break;
+            case '-': *n->trg = *n->v1 - *n->v2; pc++; break;
+            case '*': *n->trg = *n->v1 * *n->v2; pc++; break;
+            case 'i': pc = (*n->v1 < *n->v2) ? *n->jmp_ptr : pc + 1; break;
+            case 'p': printf("%d\n", *n->v1); pc++; break;
+            case 'x': for (int j = 0; j < l_cnt; j++) fns[j]((char*)n->v1); pc++; break;
+            default: pc++;
+        }
+    }
     return 0;
 }
