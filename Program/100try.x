@@ -8,6 +8,5 @@ start_timer
 :LOOP
 k + 1 = k
 if k < 100000 GOTO LOOP
-
-stop_timer
 print k
+stop_timer
